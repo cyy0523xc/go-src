@@ -26,6 +26,7 @@ type importer struct {
 	data    []byte
 	path    string
 	buf     []byte // for reading strings
+	version string
 
 	// object lists
 	strList       []string         // in order of appearance
@@ -75,8 +76,9 @@ func BImportData(fset *token.FileSet, imports map[string]*types.Package, data []
 
 	// --- generic export data ---
 
-	if v := p.string(); v != "v0" {
-		return p.read, nil, fmt.Errorf("unknown export data version: %s", v)
+	p.version = p.string()
+	if p.version != "v0" && p.version != "v1" {
+		return p.read, nil, fmt.Errorf("unknown export data version: %s", p.version)
 	}
 
 	// populate typList with predeclared "known" types
@@ -179,7 +181,7 @@ func (p *importer) declare(obj types.Object) {
 		// imported.
 		// (See also the comment in cmd/compile/internal/gc/bimport.go importer.obj,
 		// switch case importing functions).
-		panic(fmt.Sprintf("%s already declared", alt.Name()))
+		panic(fmt.Sprintf("inconsistent import:\n\t%v\npreviously imported as:\n\t%v\n", alt, obj))
 	}
 }
 
@@ -343,6 +345,10 @@ func (p *importer) typ(parent *types.Package) types.Type {
 			recv, _ := p.paramList() // TODO(gri) do we need a full param list for the receiver?
 			params, isddd := p.paramList()
 			result, _ := p.paramList()
+
+			if p.version == "v1" {
+				p.int() // nointerface flag - discarded
+			}
 
 			sig := types.NewSignature(recv.At(0), params, result, isddd)
 			t0.AddMethod(types.NewFunc(pos, parent, name, sig))
